@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+import "acv_common_message.proto";
+
+package acv.proto.acv;
+
+option java_package = "com.ncs.vit.vca.proto.acv";
+option java_outer_classname = "ACVFileStoreProtos";
+
+////////////////////////////////////////////////////////////////////////////////
+// RPC requests and responses
+////////////////////////////////////////////////////////////////////////////////
+
+message AddFileStoreRequest {
+    string id = 1;  // Store ID
+}
+
+message AddFileStoreResponse {
+    ACVResult result = 1;
+}
+
+message RemoveFileStoreRequest {
+    string id = 1;  // Store ID
+}
+
+message RemoveFileStoreResponse {
+    ACVResult result = 1;
+}
+
+message ListFileStoresRequest {
+}
+
+message ListFileStoresResponse {
+    ACVResult result = 1;
+    repeated string id = 2;
+}
+
+message PutFileStoreDirectoryRequest {
+    string id = 1;  // Store ID
+    string path = 2;
+}
+
+message PutFileStoreDirectoryResponse {
+    ACVResult result = 1;
+}
+
+message PutFileStoreFileRequestHeader {
+    string id = 1;  // Store ID
+    string path = 2;
+    uint64 file_size = 3;
+}
+
+message PutFileStoreFileRequest {
+    oneof type {
+        PutFileStoreFileRequestHeader header = 1;
+        bytes file_fragment = 2;
+    }
+}
+
+message PutFileStoreFileResponse {
+    ACVResult result = 1;
+}
+
+message RemoveFileStorePathRequest {
+    string id = 1;  // Store ID
+    string path = 2;
+}
+
+message RemoveFileStorePathResponse {
+    ACVResult result = 1;
+}
+
+message GetFileStoreFileRequest {
+    string id = 1;  // Store ID
+    string path = 2;
+}
+
+message GetFileStoreFileResponseHeader {
+    ACVResult result = 1;
+    uint64 file_size = 2;
+}
+
+message GetFileStoreFileResponse {
+    oneof type {
+        GetFileStoreFileResponseHeader header = 1;
+        bytes file_fragment = 2;
+    }
+}
+
+message ListFileStorePathsRequest {
+    string id = 1;  // Store ID
+    string path = 2;  // Optional
+    bool recursive = 3;
+}
+
+message ListFileStorePathsResponse {
+    ACVResult result = 1;
+    repeated FileStorePathInfo info = 2;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Services
+////////////////////////////////////////////////////////////////////////////////
+
+service ACVFileStore {
+    // Adds a file store. This file store is initially empty.
+    rpc AddFileStore(AddFileStoreRequest) returns (AddFileStoreResponse);
+
+    // Removes a file store. Any existing contents in this file store will be
+    // removed.
+    rpc RemoveFileStore(RemoveFileStoreRequest) returns (RemoveFileStoreResponse);
+
+    // Lists the file stores.
+    rpc ListFileStores(ListFileStoresRequest) returns (ListFileStoresResponse);
+
+    // Puts an empty directory to a file store. Any parent directories are
+    // created.
+    rpc PutFileStoreDirectory(PutFileStoreDirectoryRequest) returns (PutFileStoreDirectoryResponse);
+
+    // Puts a file to a file store. Any parent directories are created.
+    // Input: header [file_fragment ...]
+    rpc PutFileStoreFile(stream PutFileStoreFileRequest) returns (PutFileStoreFileResponse);
+
+    // Gets the contents of a file from a file store.
+    // Output: header [file_fragment ...]
+    rpc GetFileStoreFile(GetFileStoreFileRequest) returns (stream GetFileStoreFileResponse);
+
+    // Removes a path from a file store. If this path is a directory, then any
+    // children in it are removed.
+    rpc RemoveFileStorePath(RemoveFileStorePathRequest) returns (RemoveFileStorePathResponse);
+
+    // Lists the paths from a file store.
+    rpc ListFileStorePaths(ListFileStorePathsRequest) returns (ListFileStorePathsResponse);
+}
+

@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>qa_testing_report.html</h1>
+    <p>Report generated on 14-May-2020 at 13:07:25 by<a href="https://pypi.python.org/pypi/pytest-html"> pytest-html</a> v1.19.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_231</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;3.6.0&apos;, &apos;py&apos;: &apos;1.5.3&apos;, &apos;pluggy&apos;: &apos;0.6.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.16299-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;1.19.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>5 tests ran in 2.04 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">4 passed</span>, <input checked="true" class="filter" data-test-result="skipped" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">1 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">1 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="error results-table-row">
+        <tr>
+          <td class="col-result">Error</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c5_grpc_sample]::teardown</td>
+          <td class="col-duration">0.04</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;class &#x27;cases.test_cases.TestCases&#x27;&gt;<br/><br/>    def teardown_class(self):<br/>&gt;       ExcelUtil.write_result_to_test_data(self._datac, tc.test_data_path, self.all_test_results)<br/><br/>cases\test_cases.py:36: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>util\datacentral_util.py:147: in write_result_to_test_data<br/>    ExcelUtil.update_value_to_excel(pendingupdate, datapath)<br/>util\datacentral_util.py:81: in update_value_to_excel<br/>    new_excel.save(excel_path)<br/>d:\tools\python\lib\site-packages\xlwt\Workbook.py:710: in save<br/>    doc.save(filename_or_stream, self.get_biff_data())<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;xlwt.CompoundDoc.XlsDoc object at 0x0000023B6B78F0B8&gt;<br/>file_name_or_filelike_obj = &#x27;D:\\ws_project_2020\\qa-restful-api-testing-framework\\data\\test_data_framework.xls&#x27;<br/>stream = b&#x27;\t\x08\x10\x00\x00\x06\x05\x00\xbb\r\xcc\x07\x00\x00\x00\x00\x06\x00\x00\x00\xe1\x00\x02\x00\xb0\x04\xc1\x00\x02\x00...00\x0e\x00,\x00j\x00\x00\x00&gt;\x02\x12\x00\xb6\x06\x00\x00\x03\x00@\x00\x00\x00&lt;\x00d\x00\x00\x00\x00\x00\n\x00\x00\x00&#x27;<br/><br/>    def save(self, file_name_or_filelike_obj, stream):<br/>        # 1. Align stream on 0x1000 boundary (and therefore on sector boundary)<br/>        padding = b&#x27;\x00&#x27; * (0x1000 - (len(stream) % 0x1000))<br/>        self.book_stream_len = len(stream) + len(padding)<br/>    <br/>        self._build_directory()<br/>        self._build_sat()<br/>        self._build_header()<br/>    <br/>        f = file_name_or_filelike_obj<br/>        we_own_it = not hasattr(f, &#x27;write&#x27;)<br/>        if we_own_it:<br/>&gt;           f = open(file_name_or_filelike_obj, &#x27;w+b&#x27;)<br/><span class="error">E           PermissionError: [Errno 13] Permission denied: &#x27;D:\\ws_project_2020\\qa-restful-api-testing-framework\\data\\test_data_framework.xls&#x27;</span><br/><br/>d:\tools\python\lib\site-packages\xlwt\CompoundDoc.py:262: PermissionError<br/>------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is False
+test_cases.py              142 INFO     Cases Fail ! c5_grpc_sample:test grpc failed,  some error hit in test scripts, please contact QA team for more help!
+test_cases.py              144 ERROR    name &#x27;protocode&#x27; is not defined
+Traceback (most recent call last):
+  File &quot;D:\ws_project_2020\qa-restful-api-testing-framework\cases\test_cases.py&quot;, line 109, in test_cases
+    response_param = response_param)
+  File &quot;D:\ws_project_2020\qa-restful-api-testing-framework\ncsqa\qainterface.py&quot;, line 31, in get_interface
+    interface = GRPCInterface(eval(connection_info), request_param, request_data, request_method)
+  File &quot;&lt;string&gt;&quot;, line 2, in &lt;module&gt;
+NameError: name &#x27;protocode&#x27; is not defined</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c5_grpc_sample]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;cases.test_cases.TestCases object at 0x0000023B6B880128&gt;<br/>case_id = &#x27;c5_grpc_sample&#x27;, case_purpose = &#x27;test grpc&#x27;<br/>request_method = &#x27;AddFileStore&#x27;<br/>connection_info = &#x27;{&quot;grpc_client&quot;:&quot;protocode.acv_filestore_rpc_pb2&quot;,\n&quot;grpc_server&quot;:protocode.acv_filestore_rpc_pb2_grpc,\n&quot;grpc_server_stub&quot;:&quot;ACVFileStoreStub&quot;}&#x27;<br/>request_param = &#x27;AddFileStoreRequest&#x27;<br/>request_data = &#x27;{&quot;id&quot;: &quot;aaa_test_add_file_store&quot;}&#x27;<br/>response_param = &#x27;AddFileStoreResponse&#x27;, expected_statuscd = &#x27;&#x27;<br/>expected_response = &#x27;&#x27;, validation_query = &#x27;&#x27;, expected_validation_result = &#x27;&#x27;<br/>interaction_type = &#x27;grpc&#x27;, case_type = &#x27;&#x27;<br/><br/>    def test_cases(self, case_id,  case_purpose, request_method,<br/>                   connection_info, request_param, request_data, response_param,<br/>                   expected_statuscd, expected_response, validation_query,<br/>                   expected_validation_result, interaction_type, case_type):<br/>        # noinspection PyBroadException<br/>        try:<br/>            test_result = &quot;Pass&quot;<br/>    <br/>            self.logging.debug(f&quot;the setup_fail indicator is {global_util.get_value(&#x27;setup_fail&#x27;, False)}&quot;)<br/>            if global_util.get_value(&quot;setup_fail&quot;, False):<br/>                test_result = &quot;Skip&quot;<br/>                pytest.skip(&quot;The related setup function fail, so skip the corresponding case execute&quot;)<br/>    <br/>            # Step2:  Send request and get response<br/>            # Initial interface object<br/>            interface = InterFaceFactory.get_interface(interaction_type, request_method = request_method,<br/>                                                connection_info=connection_info,<br/>                                                request_param = request_param,<br/>                                                request_data = request_data,<br/>&gt;                                               response_param = response_param)<br/><br/>cases\test_cases.py:109: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>interaction_type = &#x27;grpc&#x27;, request_method = &#x27;AddFileStore&#x27;<br/>connection_info = &#x27;{&quot;grpc_client&quot;:&quot;protocode.acv_filestore_rpc_pb2&quot;,\n&quot;grpc_server&quot;:protocode.acv_filestore_rpc_pb2_grpc,\n&quot;grpc_server_stub&quot;:&quot;ACVFileStoreStub&quot;}&#x27;<br/>request_param = &#x27;AddFileStoreRequest&#x27;<br/>request_data = &#x27;{&quot;id&quot;: &quot;aaa_test_add_file_store&quot;}&#x27;<br/>response_param = &#x27;AddFileStoreResponse&#x27;<br/><br/>    @staticmethod<br/>    def get_interface(interaction_type, request_method = None,<br/>                                                connection_info=None,<br/>                                                request_param = None,<br/>                                                request_data = None,<br/>                                                response_param = None):<br/>    <br/>        if interaction_type not in con.SUPPORTED_INTERACTION_TYPE:<br/>            raise UnsupportedTypeError(interaction_type, con.SUPPORTED_INTERACTION_TYPE)<br/>    <br/>        if interaction_type == con.INTERACTION_TYPE_REST:<br/>            interface = RestfulInterface(request_method, connection_info, eval(request_data))<br/>        elif interaction_type == con.INTERACTION_TYPE_RABBITMQ:<br/>            interface = RabbitmqInterface(eval(connection_info), eval(request_data), response_param)<br/>        elif interaction_type == con.INTERACTION_TYPE_SOCKET:<br/>            interface = SocketInterface(connection_info, request_data, response_param)<br/>        elif interaction_type == con.INTERACTION_TYPE_GRPC:<br/>&gt;           interface = GRPCInterface(eval(connection_info), request_param, request_data, request_method)<br/><br/>ncsqa\qainterface.py:31: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>&gt;   ???<br/><span class="error">E   NameError: name &#x27;protocode&#x27; is not defined</span><br/><br/>&lt;string&gt;:2: NameError<br/><br/>During handling of the above exception, another exception occurred:<br/><br/>self = &lt;cases.test_cases.TestCases object at 0x0000023B6B880128&gt;<br/>case_id = &#x27;c5_grpc_sample&#x27;, case_purpose = &#x27;test grpc&#x27;<br/>request_method = &#x27;AddFileStore&#x27;<br/>connection_info = &#x27;{&quot;grpc_client&quot;:&quot;protocode.acv_filestore_rpc_pb2&quot;,\n&quot;grpc_server&quot;:protocode.acv_filestore_rpc_pb2_grpc,\n&quot;grpc_server_stub&quot;:&quot;ACVFileStoreStub&quot;}&#x27;<br/>request_param = &#x27;AddFileStoreRequest&#x27;<br/>request_data = &#x27;{&quot;id&quot;: &quot;aaa_test_add_file_store&quot;}&#x27;<br/>response_param = &#x27;AddFileStoreResponse&#x27;, expected_statuscd = &#x27;&#x27;<br/>expected_response = &#x27;&#x27;, validation_query = &#x27;&#x27;, expected_validation_result = &#x27;&#x27;<br/>interaction_type = &#x27;grpc&#x27;, case_type = &#x27;&#x27;<br/><br/>    def test_cases(self, case_id,  case_purpose, request_method,<br/>                   connection_info, request_param, request_data, response_param,<br/>                   expected_statuscd, expected_response, validation_query,<br/>                   expected_validation_result, interaction_type, case_type):<br/>        # noinspection PyBroadException<br/>        try:<br/>            test_result = &quot;Pass&quot;<br/>    <br/>            self.logging.debug(f&quot;the setup_fail indicator is {global_util.get_value(&#x27;setup_fail&#x27;, False)}&quot;)<br/>            if global_util.get_value(&quot;setup_fail&quot;, False):<br/>                test_result = &quot;Skip&quot;<br/>                pytest.skip(&quot;The related setup function fail, so skip the corresponding case execute&quot;)<br/>    <br/>            # Step2:  Send request and get response<br/>            # Initial interface object<br/>            interface = InterFaceFactory.get_interface(interaction_type, request_method = request_method,<br/>                                                connection_info=connection_info,<br/>                                                request_param = request_param,<br/>                                                request_data = request_data,<br/>                                                response_param = response_param)<br/>            # send the request<br/>            interface.send_request()<br/>    <br/>            # receive the response<br/>            response = interface.receive_response()<br/>            print(response)<br/>    <br/>            self.logging.debug(&quot;the response for case %s is %s&quot; % (case_id, response))<br/>    <br/>            # Step3: Get response to do common validation<br/>    <br/>            # comvalidation.common_validation(response, expected_statuscd)<br/>    <br/>            # Step4: Special validation base on caseType<br/>    <br/>            specialvalidation.special_validation(case_type, response, expected_statuscd,<br/>                                                 expected_response, validation_query, expected_validation_result)<br/>    <br/>            self.logging.info(&quot;Cases Pass ! %s:%s passed&quot; % (case_id, case_purpose))<br/>    <br/>        except AssertionError as error:<br/>    <br/>            self.logging.info(&quot;Cases Fail ! %s:%s failed, the actual result is different with expected result&quot; % (case_id, case_purpose))<br/>    <br/>            self.logging.error(error)<br/>    <br/>            test_result = &quot;Fail&quot;<br/>    <br/>            pytest.fail()<br/>    <br/>        except Exception as e:<br/>    <br/>            self.logging.info(&quot;Cases Fail ! %s:%s failed,  some error hit in test scripts, please contact QA team for more help!&quot; % (case_id, case_purpose))<br/>    <br/>            self.logging.error(e, exc_info=True)<br/>    <br/>            test_result = &quot;Fail&quot;<br/>    <br/>&gt;           pytest.fail()<br/><span class="error">E           Failed: &lt;Failed instance&gt;</span><br/><br/>cases\test_cases.py:148: Failed<br/>------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is False
+test_cases.py              142 INFO     Cases Fail ! c5_grpc_sample:test grpc failed,  some error hit in test scripts, please contact QA team for more help!
+test_cases.py              144 ERROR    name &#x27;protocode&#x27; is not defined
+Traceback (most recent call last):
+  File &quot;D:\ws_project_2020\qa-restful-api-testing-framework\cases\test_cases.py&quot;, line 109, in test_cases
+    response_param = response_param)
+  File &quot;D:\ws_project_2020\qa-restful-api-testing-framework\ncsqa\qainterface.py&quot;, line 31, in get_interface
+    interface = GRPCInterface(eval(connection_info), request_param, request_data, request_method)
+  File &quot;&lt;string&gt;&quot;, line 2, in &lt;module&gt;
+NameError: name &#x27;protocode&#x27; is not defined</div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c6_setup_skip]</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;D:\\ws_project_2020\\qa-restful-api-testing-framework\\cases\\test_cases.py&#x27;, 101, &#x27;Skipped: The related setup function fail, so skip the corresponding case execute&#x27;)<br/>------------------------------ Captured log setup ------------------------------<br/>test_cases.py               68 INFO     Setup function for case [{&#x27;case_id&#x27;: &#x27;c6_setup_skip&#x27;, &#x27;setup_request_method&#x27;: &#x27;post&#x27;, &#x27;setup_connection_info&#x27;: &#x27;/devices&#x27;, &#x27;setup_request_param&#x27;: &#x27;&#x27;, &#x27;setup_request_data&#x27;: &#x27;{&quot;json-data&quot;: {\n  &quot;name&quot;: &quot;test2&quot;,\n  &quot;uri&quot;: &quot;rtsp://192.168.200.172:554&quot;,\n  &quot;username&quot;: &quot;admin&quot;,\n  &quot;password&quot;: &quot;ms1234&quot;,\n  &quot;model&quot;: &quot;general-rtsp&quot;\n}}&#x27;, &#x27;setup_response_param&#x27;: &#x27;&#x27;, &#x27;setup_dboperation&#x27;: &#x27;&#x27;, &#x27;setup_interaction_type&#x27;: &#x27;non-support&#x27;, &#x27;setup_ind&#x27;: &#x27;y&#x27;}] fail !
+test_cases.py               69 ERROR    The passed type non-support is not in the supported type list([&#x27;restful&#x27;, &#x27;rabbitmq&#x27;, &#x27;grpc&#x27;, &#x27;socket&#x27;])
+Traceback (most recent call last):
+  File &quot;D:\ws_project_2020\qa-restful-api-testing-framework\cases\test_cases.py&quot;, line 50, in setup_method
+    response_param=setup_data_sub.get(&quot;setup_response_param&quot;))
+  File &quot;D:\ws_project_2020\qa-restful-api-testing-framework\ncsqa\qainterface.py&quot;, line 22, in get_interface
+    raise UnsupportedTypeError(interaction_type, con.SUPPORTED_INTERACTION_TYPE)
+exception.UnsupportedTypeError.UnsupportedTypeError: The passed type non-support is not in the supported type list([&#x27;restful&#x27;, &#x27;rabbitmq&#x27;, &#x27;grpc&#x27;, &#x27;socket&#x27;])------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is True</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c3_get_device]</td>
+          <td class="col-duration">0.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is False
+connectionpool.py          208 DEBUG    Starting new HTTP connection (1): 192.168.200.203
+connectionpool.py          396 DEBUG    http://192.168.200.203:30002 &quot;GET /devices/f1b58134616d4077915871752069f52e HTTP/1.1&quot; 404 None
+test_cases.py              117 DEBUG    the response for case c3_get_device is {&#x27;status&#x27;: 404, &#x27;headers&#x27;: {&#x27;Date&#x27;: &#x27;Thu, 14 May 2020 05:07:24 GMT&#x27;, &#x27;Content-Type&#x27;: &#x27;application/json&#x27;, &#x27;Transfer-Encoding&#x27;: &#x27;chunked&#x27;, &#x27;Server&#x27;: &#x27;Jetty(9.4.8.v20171121)&#x27;}, &#x27;text&#x27;: &#x27;{&quot;message&quot;:&quot;device not exist&quot;,&quot;key&quot;:&quot;OPERATION-FAIL&quot;,&quot;serviceName&quot;:&quot;device-management-service&quot;,&quot;time&quot;:1589432844453}&#x27;, &#x27;json&#x27;: {&#x27;message&#x27;: &#x27;device not exist&#x27;, &#x27;key&#x27;: &#x27;OPERATION-FAIL&#x27;, &#x27;serviceName&#x27;: &#x27;device-management-service&#x27;, &#x27;time&#x27;: 1589432844453}, &#x27;content&#x27;: b&#x27;{&quot;message&quot;:&quot;device not exist&quot;,&quot;key&quot;:&quot;OPERATION-FAIL&quot;,&quot;serviceName&quot;:&quot;device-management-service&quot;,&quot;time&quot;:1589432844453}&#x27;}
+test_cases.py              128 INFO     Cases Pass ! c3_get_device:to test precondition/teardown replacement passed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c1_add_device]</td>
+          <td class="col-duration">0.01</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is False
+connectionpool.py          208 DEBUG    Starting new HTTP connection (1): 192.168.200.203
+connectionpool.py          396 DEBUG    http://192.168.200.203:30002 &quot;POST /devices HTTP/1.1&quot; 400 None
+test_cases.py              117 DEBUG    the response for case c1_add_device is {&#x27;status&#x27;: 400, &#x27;headers&#x27;: {&#x27;Date&#x27;: &#x27;Thu, 14 May 2020 05:07:24 GMT&#x27;, &#x27;Content-Type&#x27;: &#x27;application/json&#x27;, &#x27;Transfer-Encoding&#x27;: &#x27;chunked&#x27;, &#x27;Server&#x27;: &#x27;Jetty(9.4.8.v20171121)&#x27;}, &#x27;text&#x27;: &#x27;{&quot;message&quot;:&quot;uri already exists, must be unique&quot;,&quot;key&quot;:&quot;OPERATION-FAIL&quot;,&quot;serviceName&quot;:&quot;device-management-service&quot;,&quot;time&quot;:1589432844468}&#x27;, &#x27;json&#x27;: {&#x27;message&#x27;: &#x27;uri already exists, must be unique&#x27;, &#x27;key&#x27;: &#x27;OPERATION-FAIL&#x27;, &#x27;serviceName&#x27;: &#x27;device-management-service&#x27;, &#x27;time&#x27;: 1589432844468}, &#x27;content&#x27;: b&#x27;{&quot;message&quot;:&quot;uri already exists, must be unique&quot;,&quot;key&quot;:&quot;OPERATION-FAIL&quot;,&quot;serviceName&quot;:&quot;device-management-service&quot;,&quot;time&quot;:1589432844468}&#x27;}
+test_cases.py              128 INFO     Cases Pass ! c1_add_device:test case without setup/precondtion passed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c2_delete_device]</td>
+          <td class="col-duration">0.01</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log setup ------------------------------<br/>connectionpool.py          208 DEBUG    Starting new HTTP connection (1): 192.168.200.203
+connectionpool.py          396 DEBUG    http://192.168.200.203:30002 &quot;POST /devices HTTP/1.1&quot; 200 None------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is False
+connectionpool.py          208 DEBUG    Starting new HTTP connection (1): 192.168.200.203
+connectionpool.py          396 DEBUG    http://192.168.200.203:30002 &quot;GET /devices/644aa32b17084499ac7487550da78ef0 HTTP/1.1&quot; 200 None
+test_cases.py              117 DEBUG    the response for case c2_delete_device is {&#x27;status&#x27;: 200, &#x27;headers&#x27;: {&#x27;Date&#x27;: &#x27;Thu, 14 May 2020 05:07:24 GMT&#x27;, &#x27;Content-Type&#x27;: &#x27;application/json&#x27;, &#x27;Transfer-Encoding&#x27;: &#x27;chunked&#x27;, &#x27;Server&#x27;: &#x27;Jetty(9.4.8.v20171121)&#x27;}, &#x27;text&#x27;: &#x27;{&quot;channelCount&quot;:0,&quot;id&quot;:&quot;644aa32b17084499ac7487550da78ef0&quot;,&quot;name&quot;:&quot;test2&quot;,&quot;uri&quot;:&quot;rtsp://192.168.200.172:554&quot;,&quot;username&quot;:&quot;admin&quot;,&quot;model&quot;:&quot;general-rtsp&quot;,&quot;deviceType&quot;:&quot;ipc&quot;,&quot;status&quot;:&quot;unavailable&quot;}&#x27;, &#x27;json&#x27;: {&#x27;channelCount&#x27;: 0, &#x27;id&#x27;: &#x27;644aa32b17084499ac7487550da78ef0&#x27;, &#x27;name&#x27;: &#x27;test2&#x27;, &#x27;uri&#x27;: &#x27;rtsp://192.168.200.172:554&#x27;, &#x27;username&#x27;: &#x27;admin&#x27;, &#x27;model&#x27;: &#x27;general-rtsp&#x27;, &#x27;deviceType&#x27;: &#x27;ipc&#x27;, &#x27;status&#x27;: &#x27;unavailable&#x27;}, &#x27;content&#x27;: b&#x27;{&quot;channelCount&quot;:0,&quot;id&quot;:&quot;644aa32b17084499ac7487550da78ef0&quot;,&quot;name&quot;:&quot;test2&quot;,&quot;uri&quot;:&quot;rtsp://192.168.200.172:554&quot;,&quot;username&quot;:&quot;admin&quot;,&quot;model&quot;:&quot;general-rtsp&quot;,&quot;deviceType&quot;:&quot;ipc&quot;,&quot;status&quot;:&quot;unavailable&quot;}&#x27;}
+test_cases.py              128 INFO     Cases Pass ! c2_delete_device:test case with setup and global value through setup  passed</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">cases/test_cases.py::TestCases::()::test_cases[c4_rabbitmq_sample]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>test_cases.py               98 DEBUG    the setup_fail indicator is False
+select_connection.py       427 DEBUG    Using SelectPoller
+base_connection.py         168 DEBUG    Created default connection workflow &lt;pika.adapters.utils.connection_workflow.AMQPConnectionWorkflow object at 0x0000023B6B83B588&gt;
+connection_workflow.py     656 DEBUG    Starting AMQP Connection workflow asynchronously.
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B83B780&gt; with deadline=618203.125 and callback=functools.partial(&lt;bound method AMQPConnectionWorkflow._start_new_cycle_async of &lt;pika.adapters.utils.connection_workflow.AMQPConnectionWorkflow object at 0x0000023B6B83B588&gt;&gt;, first=True); now=618203.125; delay=0
+connection_workflow.py     753 DEBUG    Beginning a new AMQP connection workflow cycle; attempts remaining after this: 0
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B7E7710&gt; with deadline=618203.125 and callback=&lt;bound method AMQPConnectionWorkflow._try_next_config_async of &lt;pika.adapters.utils.connection_workflow.AMQPConnectionWorkflow object at 0x0000023B6B83B588&gt;&gt;; now=618203.125; delay=0
+connection_workflow.py     779 DEBUG    _try_next_config_async: &#x27;192.168.200.203&#x27;:5672
+select_connection.py       478 DEBUG    add_callback_threadsafe: added callback=&lt;bound method _AddressResolver._dispatch_result of &lt;pika.adapters.utils.selector_ioloop_adapter._AddressResolver object at 0x0000023B6B80C400&gt;&gt;
+select_connection.py       491 DEBUG    process_timeouts: invoking callback=&lt;bound method _AddressResolver._dispatch_result of &lt;pika.adapters.utils.selector_ioloop_adapter._AddressResolver object at 0x0000023B6B80C400&gt;&gt;
+selector_ioloop_adapter.py  590 DEBUG    Invoking asynchronous getaddrinfo() completion callback; host=&#x27;192.168.200.203&#x27;
+connection_workflow.py     804 DEBUG    getaddrinfo returned 1 records
+connection_workflow.py     822 DEBUG    Attempting to connect using address record (&lt;AddressFamily.AF_INET: 2&gt;, &lt;SocketKind.SOCK_STREAM: 1&gt;, 6, &#x27;&#x27;, (&#x27;192.168.200.203&#x27;, 5672))
+connection_workflow.py     179 INFO     Pika version 1.1.0 connecting to (&#x27;192.168.200.203&#x27;, 5672)
+select_connection.py       478 DEBUG    add_callback_threadsafe: added callback=&lt;bound method _AsyncSocketConnector._start_async of &lt;pika.adapters.utils.io_services_utils._AsyncSocketConnector object at 0x0000023B6B80C278&gt;&gt;
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B83B7B8&gt; with deadline=618213.125 and callback=&lt;bound method AMQPConnector._on_tcp_connection_timeout of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt;; now=618203.125; delay=10.0
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B83B8D0&gt; with deadline=618218.125 and callback=&lt;bound method AMQPConnector._on_overall_timeout of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt;; now=618203.125; delay=15.0
+select_connection.py       491 DEBUG    process_timeouts: invoking callback=&lt;bound method _AsyncSocketConnector._start_async of &lt;pika.adapters.utils.io_services_utils._AsyncSocketConnector object at 0x0000023B6B80C278&gt;&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncSocketConnector._on_writable of &lt;pika.adapters.utils.io_services_utils._AsyncSocketConnector object at 0x0000023B6B80C278&gt;&gt;)
+selector_ioloop_adapter.py  324 DEBUG    set_writer(696, _) added handler Wr
+io_services_utils.py       325 DEBUG    Connection-establishment is in progress for &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;0.0.0.0&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;.
+io_services_utils.py       345 INFO     Socket connected: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+io_services_utils.py       274 DEBUG    _AsyncSocketConnector._report_completion(None); &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  361 DEBUG    remove_writer(696) removed handler
+select_connection.py       283 DEBUG    remove_timeout: removing timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B83B7B8&gt; with deadline=618213.125 and callback=&lt;bound method AMQPConnector._on_tcp_connection_timeout of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt;
+connection_workflow.py     382 DEBUG    TCP connection to broker established: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;.
+io_services_utils.py       456 DEBUG    _AsyncStreamConnector.start(); &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+select_connection.py       478 DEBUG    add_callback_threadsafe: added callback=&lt;bound method _AsyncStreamConnector._start_async of &lt;pika.adapters.utils.io_services_utils._AsyncStreamConnector object at 0x0000023B6B83BC50&gt;&gt;
+select_connection.py       491 DEBUG    process_timeouts: invoking callback=&lt;bound method _AsyncStreamConnector._start_async of &lt;pika.adapters.utils.io_services_utils._AsyncStreamConnector object at 0x0000023B6B83BC50&gt;&gt;
+io_services_utils.py       528 DEBUG    _AsyncStreamConnector._start_async(); &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+io_services_utils.py       566 DEBUG    _AsyncStreamConnector._linkup()
+connection.py             2275 DEBUG    New Connection state: CLOSED (prev=CLOSED)
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_start of &lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_close_from_broker of &lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._default_on_connection_error of &lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+connection.py             2275 DEBUG    New Connection state: INIT (prev=CLOSED)
+connection.py             1094 DEBUG    Using external connection workflow.
+io_services_utils.py       715 DEBUG    _AsyncTransportBase.__init__: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  252 DEBUG    SelectorIOServicesAdapter.set_reader(696, &lt;bound method _AsyncPlaintextTransport._on_socket_readable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  263 DEBUG    set_reader(696, _) added handler Rd
+io_services_utils.py       598 DEBUG    _linkup(): created transport &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;
+connection.py             2275 DEBUG    New Connection state: PROTOCOL (prev=INIT)
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+io_services_utils.py       610 DEBUG    _linkup(): introduced transport to protocol &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;; _StreamingProtocolShim: &lt;SelectConnection PROTOCOL transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;
+io_services_utils.py       500 DEBUG    _AsyncStreamConnector._report_completion((&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;, _StreamingProtocolShim: &lt;SelectConnection PROTOCOL transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;)); &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+connection_workflow.py     428 INFO     Streaming transport linked up: (&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;, _StreamingProtocolShim: &lt;SelectConnection PROTOCOL transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;).
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Connection._default_on_connection_error of &lt;SelectConnection PROTOCOL transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method AMQPConnector._on_amqp_handshake_done of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method AMQPConnector._on_amqp_handshake_done of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+io_services_utils.py       422 DEBUG    _AsyncStreamConnector._cleanup(False)
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 0:Connection.Start
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_start of &lt;SelectConnection PROTOCOL transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Connection._on_connection_start of &lt;SelectConnection PROTOCOL transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt; for &quot;0:Connection.Start&quot;
+connection.py             2275 DEBUG    New Connection state: START (prev=PROTOCOL)
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_tune of &lt;SelectConnection START transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 0:Connection.Tune
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_tune of &lt;SelectConnection START transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Connection._on_connection_tune of &lt;SelectConnection START transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt; for &quot;0:Connection.Tune&quot;
+connection.py             2275 DEBUG    New Connection state: TUNE (prev=START)
+connection.py             1570 DEBUG    Creating a HeartbeatChecker: 60
+heartbeat.py                68 DEBUG    timeout: 60.000000 send_interval: 30.000000 check_interval: 65.000000
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B86B278&gt; with deadline=618233.14 and callback=&lt;bound method HeartbeatChecker._send_heartbeat of &lt;pika.heartbeat.HeartbeatChecker object at 0x0000023B6B86B208&gt;&gt;; now=618203.14; delay=30.0
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B86B2B0&gt; with deadline=618268.14 and callback=&lt;bound method HeartbeatChecker._check_heartbeat of &lt;pika.heartbeat.HeartbeatChecker object at 0x0000023B6B86B208&gt;&gt;; now=618203.14; delay=65
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_open_ok of &lt;SelectConnection TUNE transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 0:Connection.OpenOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_open_ok of &lt;SelectConnection TUNE transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Connection._on_connection_open_ok of &lt;SelectConnection TUNE transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt; for &quot;0:Connection.OpenOk&quot;
+connection.py             2275 DEBUG    New Connection state: OPEN (prev=TUNE)
+callback.py                217 DEBUG    Processing 0:_on_connection_open_ok
+callback.py                231 DEBUG    Calling &lt;bound method AMQPConnector._on_amqp_handshake_done of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt; for &quot;0:_on_connection_open_ok&quot;
+connection_workflow.py     454 DEBUG    AMQPConnector: AMQP handshake attempt completed; state=3; error=None; &#x27;192.168.200.203&#x27;/(&lt;AddressFamily.AF_INET: 2&gt;, &lt;SocketKind.SOCK_STREAM: 1&gt;, 6, &#x27;&#x27;, (&#x27;192.168.200.203&#x27;, 5672))
+connection_workflow.py     472 DEBUG    AMQPConnector: AMQP connection established for &#x27;192.168.200.203&#x27;/(&lt;AddressFamily.AF_INET: 2&gt;, &lt;SocketKind.SOCK_STREAM: 1&gt;, 6, &#x27;&#x27;, (&#x27;192.168.200.203&#x27;, 5672)): &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;
+connection_workflow.py     293 INFO     AMQPConnector - reporting success: &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;
+select_connection.py       283 DEBUG    remove_timeout: removing timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B83B8D0&gt; with deadline=618218.125 and callback=&lt;bound method AMQPConnector._on_overall_timeout of &lt;pika.adapters.utils.connection_workflow.AMQPConnector object at 0x0000023B6B80CCC0&gt;&gt;
+connection_workflow.py     839 DEBUG    Connection attempt completed with &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;
+connection_workflow.py     725 INFO     AMQPConnectionWorkflow - reporting success: &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+blocking_connection.py     453 INFO     Connection workflow succeeded: &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B675AC8&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+connection.py             1558 DEBUG    Creating channel 1
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_channel_cleanup of &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: &lt;Channel number=1 CLOSED conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_getempty of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_cancel of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_flow of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_close_from_broker of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Channel.Open([&#x27;out_of_band=&#x27;])&gt;; acceptable_replies=[&lt;class &#x27;pika.spec.Channel.OpenOk&#x27;&gt;]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_openok of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method BlockingChannel._on_consumer_cancelled_by_broker of &lt;BlockingChannel impl=&lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B873A48&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method BlockingChannel._on_channel_closed of &lt;BlockingChannel impl=&lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;arguments&#x27;: None}
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B873A88&gt;&gt;, &#x27;one_shot&#x27;: False, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None}
+blocking_connection.py    1247 INFO     Created channel=1
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Channel.OpenOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_openok of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Channel.OpenOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_openok of &lt;Channel number=1 OPENING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Channel.OpenOk&quot;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Exchange.Declare([&#x27;arguments={}&#x27;, &#x27;auto_delete=False&#x27;, &#x27;durable=False&#x27;, &#x27;exchange=vms-dms&#x27;, &#x27;internal=False&#x27;, &#x27;nowait=False&#x27;, &#x27;passive=True&#x27;, &#x27;ticket=0&#x27;, &#x27;type=direct&#x27;])&gt;; acceptable_replies=[&lt;class &#x27;pika.spec.Exchange.DeclareOk&#x27;&gt;]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B81DFC8&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Exchange.DeclareOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B81DFC8&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Exchange.DeclareOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B81DFC8&gt;&gt; for &quot;1:Exchange.DeclareOk&quot;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Queue.Declare([&#x27;arguments={}&#x27;, &#x27;auto_delete=False&#x27;, &#x27;durable=False&#x27;, &#x27;exclusive=True&#x27;, &#x27;nowait=False&#x27;, &#x27;passive=False&#x27;, &#x27;queue=&#x27;, &#x27;ticket=0&#x27;])&gt;; acceptable_replies=[&lt;class &#x27;pika.spec.Queue.DeclareOk&#x27;&gt;]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B81DF88&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Queue.DeclareOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B81DF88&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Queue.DeclareOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B81DF88&gt;&gt; for &quot;1:Queue.DeclareOk&quot;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Queue.Bind([&#x27;arguments={}&#x27;, &#x27;exchange=vms-dms&#x27;, &#x27;nowait=False&#x27;, &#x27;queue=amq.gen-yP966FUjxsc8wytmD2fHCw&#x27;, &#x27;routing_key=&#x27;, &#x27;ticket=0&#x27;])&gt;; acceptable_replies=[&lt;class &#x27;pika.spec.Queue.BindOk&#x27;&gt;]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B884708&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Queue.BindOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B884708&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Queue.BindOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B884708&gt;&gt; for &quot;1:Queue.BindOk&quot;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Basic.Consume([&#x27;arguments={}&#x27;, &#x27;consumer_tag=ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;, &#x27;exclusive=False&#x27;, &#x27;no_ack=False&#x27;, &#x27;no_local=False&#x27;, &#x27;nowait=False&#x27;, &#x27;queue=amq.gen-yP966FUjxsc8wytmD2fHCw&#x27;, &#x27;ticket=0&#x27;])&gt;; acceptable_replies=[(&lt;class &#x27;pika.spec.Basic.ConsumeOk&#x27;&gt;, {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;})]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_eventok of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Basic.ConsumeOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                347 DEBUG    Comparing {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;} to {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}
+callback.py                266 DEBUG    Removing callback #1: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                347 DEBUG    Comparing {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;} to {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}
+callback.py                266 DEBUG    Removing callback #1: {&#x27;callback&#x27;: &lt;bound method Channel._on_eventok of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B873A48&gt;&gt; for &quot;1:Basic.ConsumeOk&quot;
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Basic.ConsumeOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_eventok of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Basic.ConsumeOk&quot;
+channel.py                1155 DEBUG    Discarding frame &lt;METHOD([&#x27;channel_number=1&#x27;, &#x27;frame_type=1&#x27;, &quot;method=&lt;Basic.ConsumeOk([&#x27;consumer_tag=ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;])&gt;&quot;])&gt;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B89ABE0&gt; with deadline=618203.171 and callback=&lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B891B48&gt;&gt;; now=618203.171; delay=0
+select_connection.py       263 DEBUG    call_later: added timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B89A390&gt; with deadline=618203.171 and callback=&lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B898488&gt;&gt;; now=618203.171; delay=0
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+blocking_connection.py    1512 DEBUG    Channel.close(0, Normal shutdown)
+blocking_connection.py    1472 DEBUG    Cancelling 1 consumers
+channel.py                 241 DEBUG    Cancelling consumer: ctag1.4eae2ddfe1764245859a30ef739fe462 (nowait=False)
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B898588&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Basic.Cancel([&#x27;consumer_tag=ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;, &#x27;nowait=False&#x27;])&gt;; acceptable_replies=[(&lt;class &#x27;pika.spec.Basic.CancelOk&#x27;&gt;, {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;})]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_cancelok of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Basic.CancelOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B898588&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                347 DEBUG    Comparing {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;} to {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                347 DEBUG    Comparing {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;} to {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_cancelok of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: {&#x27;consumer_tag&#x27;: &#x27;ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;}, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method _CallbackResult.signal_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B898588&gt;&gt; for &quot;1:Basic.CancelOk&quot;
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Basic.CancelOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_cancelok of &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Basic.CancelOk&quot;
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                 534 INFO     Closing channel (0): &#x27;Normal shutdown&#x27; on &lt;Channel number=1 OPEN conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+channel.py                1352 DEBUG    Entering blocking state on frame &lt;Channel.Close([&#x27;class_id=0&#x27;, &#x27;method_id=0&#x27;, &#x27;reply_code=0&#x27;, &#x27;reply_text=Normal shutdown&#x27;])&gt;; acceptable_replies=[&lt;class &#x27;pika.spec.Channel.CloseOk&#x27;&gt;]
+channel.py                1359 DEBUG    Adding on_synchronous_complete callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+channel.py                1365 DEBUG    Adding passed-in RPC response callback
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Channel._on_closeok of &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 1:Channel.CloseOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Channel._on_closeok of &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_synchronous_complete of &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Channel.CloseOk&quot;
+channel.py                1256 DEBUG    0 blocked frames
+callback.py                231 DEBUG    Calling &lt;bound method Channel._on_closeok of &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt; for &quot;1:Channel.CloseOk&quot;
+channel.py                1119 INFO     Received &lt;Channel.CloseOk&gt; on &lt;Channel number=1 CLOSING conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;
+callback.py                217 DEBUG    Processing 1:_on_channel_close
+callback.py                231 DEBUG    Calling &lt;bound method BlockingChannel._on_channel_closed of &lt;BlockingChannel impl=&lt;Channel number=1 CLOSED conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;&gt; for &quot;1:_on_channel_close&quot;
+blocking_connection.py    1400 DEBUG    _on_channel_closed: ChannelClosedByClient: (0) &#x27;Normal shutdown&#x27;; &lt;BlockingChannel impl=&lt;Channel number=1 CLOSED conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;
+callback.py                217 DEBUG    Processing 1:_on_channel_cleanup
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Connection._on_channel_cleanup of &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: &lt;Channel number=1 CLOSED conn=&lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Connection._on_channel_cleanup of &lt;SelectConnection OPEN transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt; for &quot;1:_on_channel_cleanup&quot;
+connection.py             1680 DEBUG    Removed channel 1
+callback.py                182 DEBUG    Clearing out &#x27;1&#x27; from the stack
+io_services_utils.py      1063 DEBUG    Recv would block on &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+blocking_connection.py     788 INFO     Closing connection (200): Normal shutdown
+connection.py             2275 DEBUG    New Connection state: CLOSING (prev=OPEN)
+connection.py             1295 INFO     Closing connection (200): &#x27;Normal shutdown&#x27;
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_close_ok of &lt;SelectConnection CLOSING transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+selector_ioloop_adapter.py  313 DEBUG    SelectorIOServicesAdapter.set_writer(696, &lt;bound method _AsyncPlaintextTransport._on_socket_writable of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;)
+selector_ioloop_adapter.py  330 DEBUG    set_writer(696, _) updated handler RdWr
+io_services_utils.py      1023 DEBUG    Turned on writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  364 DEBUG    remove_writer(696) updated handler Rd
+io_services_utils.py      1112 DEBUG    Turned off writability watcher: &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+callback.py                217 DEBUG    Processing 0:Connection.CloseOk
+callback.py                401 DEBUG    Processing use of oneshot callback
+callback.py                403 DEBUG    0 registered uses left
+callback.py                266 DEBUG    Removing callback #0: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_close_ok of &lt;SelectConnection CLOSING transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 0}
+callback.py                231 DEBUG    Calling &lt;bound method Connection._on_connection_close_ok of &lt;SelectConnection CLOSING transport=&lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt; params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt; for &quot;0:Connection.CloseOk&quot;
+connection.py             1789 DEBUG    _on_connection_close_ok: frame=&lt;METHOD([&#x27;channel_number=0&#x27;, &#x27;frame_type=1&#x27;, &#x27;method=&lt;Connection.CloseOk&gt;&#x27;])&gt;
+heartbeat.py               138 DEBUG    Removing timer for next heartbeat send interval
+select_connection.py       283 DEBUG    remove_timeout: removing timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B86B278&gt; with deadline=618233.14 and callback=&lt;bound method HeartbeatChecker._send_heartbeat of &lt;pika.heartbeat.HeartbeatChecker object at 0x0000023B6B86B208&gt;&gt;
+heartbeat.py               142 DEBUG    Removing timer for next heartbeat check interval
+select_connection.py       283 DEBUG    remove_timeout: removing timeout &lt;pika.adapters.select_connection._Timeout object at 0x0000023B6B86B2B0&gt; with deadline=618268.14 and callback=&lt;bound method HeartbeatChecker._check_heartbeat of &lt;pika.heartbeat.HeartbeatChecker object at 0x0000023B6B86B208&gt;&gt;
+io_services_utils.py       732 INFO     Aborting transport connection: state=1; &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+io_services_utils.py       907 INFO     _AsyncTransportBase._initate_abort(): Initiating abrupt asynchronous transport shutdown: state=1; error=None; &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+io_services_utils.py       870 INFO     Deactivating transport: state=1; &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+selector_ioloop_adapter.py  280 DEBUG    SelectorIOServicesAdapter.remove_reader(696)
+selector_ioloop_adapter.py  300 DEBUG    remove_reader(696) removed handler
+selector_ioloop_adapter.py  341 DEBUG    SelectorIOServicesAdapter.remove_writer(696)
+selector_ioloop_adapter.py  348 DEBUG    remove_writer(696) neither was set.
+select_connection.py       478 DEBUG    add_callback_threadsafe: added callback=functools.partial(&lt;bound method _AsyncTransportBase._connection_lost_notify_async of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;, None)
+io_services_utils.py      1077 DEBUG    Leaving Plaintext consumer due to inactive state: state=3; &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+select_connection.py       491 DEBUG    process_timeouts: invoking callback=functools.partial(&lt;bound method _AsyncTransportBase._connection_lost_notify_async of &lt;pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x0000023B6B858160&gt;&gt;, None)
+io_services_utils.py       958 DEBUG    Concluding transport shutdown: state=3; error=None
+base_connection.py         429 DEBUG    connection_lost: None
+connection.py             1999 INFO     AMQP stack terminated, failed to connect, or aborted: opened=True, error-arg=None; pending-error=ConnectionClosedByClient: (200) &#x27;Normal shutdown&#x27;
+connection.py             2275 DEBUG    New Connection state: CLOSED (prev=CLOSING)
+connection.py             2065 INFO     Stack terminated due to ConnectionClosedByClient: (200) &#x27;Normal shutdown&#x27;
+callback.py                217 DEBUG    Processing 0:_on_connection_closed
+callback.py                231 DEBUG    Calling &lt;bound method _CallbackResult.set_value_once of &lt;pika.adapters.blocking_connection._CallbackResult object at 0x0000023B6B675AC8&gt;&gt; for &quot;0:_on_connection_closed&quot;
+connection.py             2275 DEBUG    New Connection state: CLOSED (prev=CLOSED)
+callback.py                165 DEBUG    Added: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_start of &lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 1}
+callback.py                156 DEBUG    Incremented callback reference counter: {&#x27;callback&#x27;: &lt;bound method Connection._on_connection_close_from_broker of &lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;, &#x27;one_shot&#x27;: True, &#x27;only&#x27;: None, &#x27;arguments&#x27;: None, &#x27;calls&#x27;: 2}
+io_services_utils.py       883 INFO     Closing transport socket and unlinking: state=3; &lt;socket.socket fd=696, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;192.168.200.39&#x27;, 57352), raddr=(&#x27;192.168.200.203&#x27;, 5672)&gt;
+blocking_connection.py     525 INFO     User-initiated close: result=BlockingConnection__OnClosedArgs(connection=&lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;, error=ConnectionClosedByClient: (200) &#x27;Normal shutdown&#x27;)
+test_cases.py              117 DEBUG    the response for case c4_rabbitmq_sample is (&lt;BlockingChannel impl=&lt;Channel number=1 CLOSED conn=&lt;SelectConnection CLOSED transport=None params=&lt;ConnectionParameters host=192.168.200.203 port=5672 virtual_host=/vms ssl=False&gt;&gt;&gt;&gt;, &lt;Basic.Deliver([&#x27;consumer_tag=ctag1.4eae2ddfe1764245859a30ef739fe462&#x27;, &#x27;delivery_tag=1&#x27;, &#x27;exchange=&#x27;, &#x27;redelivered=False&#x27;, &#x27;routing_key=amq.gen-yP966FUjxsc8wytmD2fHCw&#x27;])&gt;, &lt;BasicProperties([&#x27;app_id=vms-dms@vms-dms&#x27;, &#x27;correlation_id=8359e658-1db7-4c78-b268-fa85ce94bb75&#x27;])&gt;, b&#x27;{&quot;code&quot;:1,&quot;action&quot;:&quot;get-channel-info&quot;,&quot;body&quot;:{&quot;message&quot;:&quot;device not exist&quot;}}&#x27;)
+test_cases.py              128 INFO     Cases Pass ! c4_rabbitmq_sample:test rabbitmq passed</div></td></tr></tbody></table></body></html>

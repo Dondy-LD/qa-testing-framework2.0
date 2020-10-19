@@ -1,0 +1,39 @@
+import pika
+import socket
+
+
+###Rabbitmq###
+DEFAULT_HOST = pika.ConnectionParameters.DEFAULT_HOST
+DEFAULT_PORT = pika.ConnectionParameters.DEFAULT_PORT
+DEFAULT_USERNAME = pika.ConnectionParameters.DEFAULT_USERNAME
+DEFAULT_PASSWORD = pika.ConnectionParameters.DEFAULT_PASSWORD
+DEFAULT_VIRTUAL_HOST = pika.ConnectionParameters.DEFAULT_VIRTUAL_HOST
+
+###Socket###
+DEFAULT_SOCKET_FAMILY = socket.AF_INET
+DEFAULT_SOCKET_TYPE_TCP = socket.SOCK_STREAM
+DEFAULT_SOCKET_TYPE_UDP = socket.SOCK_DGRAM
+
+###DataCentral###
+FILE_TYPE_EXCEL = "excel"
+FILE_TYPE_YAML = "yaml"
+FILE_TYPE_XML = "xml"
+FILE_TYPE_DB = "db"
+PATH_SEPARATOR = "&"
+DEFAULT_SHEET_INDEX = 0
+
+INTERACTION_TYPE_REST = "restful"
+INTERACTION_TYPE_RABBITMQ = "rabbitmq"
+INTERACTION_TYPE_GRPC = "grpc"
+INTERACTION_TYPE_SOCKET = "socket"
+SUPPORTED_INTERACTION_TYPE = [INTERACTION_TYPE_REST,
+                              INTERACTION_TYPE_RABBITMQ,
+                              INTERACTION_TYPE_GRPC,
+                              INTERACTION_TYPE_SOCKET]
+
+DATABASE_TYPE_MONGODB = "mongo"
+DATABASE_TYPE_MSSQL = "mssql"
+DATABASE_TYPE_REDIS = "redis"
+SUPPORTED_DATABASE_TYPE = [DATABASE_TYPE_MONGODB,
+                           DATABASE_TYPE_MSSQL,
+                           DATABASE_TYPE_REDIS]

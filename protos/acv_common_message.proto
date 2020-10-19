@@ -1,0 +1,365 @@
+syntax = "proto3";
+
+package acv.proto.acv;
+
+option java_package = "com.ncs.vit.vca.proto.acv";
+option java_outer_classname = "ACVCommonProtos";
+
+import "google/protobuf/timestamp.proto";
+
+////////////////////////////////////////////////////////////////////////////////
+// Common messages
+////////////////////////////////////////////////////////////////////////////////
+
+message ACVResult {
+    bool success = 1;
+    enum ErrorCode {
+        UNKNOWN = 0;  // Future-proof default
+        CANCELLED = 1;
+        UNSUPPORTED = 2;
+        EXECUTION_ERROR = 3;
+        PRECONDITION_FAILED = 4;
+        INVALID_ARGUMENT = 5;
+        NOT_FOUND = 6;
+        ALREADY_EXISTS = 7;
+    }
+    ErrorCode error_code = 2;
+    string error_message = 3;  // Optional
+    map<string, string> error_detail = 4;  // Optional
+}
+
+message Endpoint {
+    string host = 1;
+    uint32 port = 2;
+}
+
+message ServerStats {
+    double cpu_load = 1;
+    uint64 total_physical_memory = 2;
+    uint64 available_physical_memory = 3;
+    uint64 total_virtual_memory = 4;
+    uint64 available_virtual_memory = 5;
+    uint64 total_gpu_memory = 6;
+    uint64 available_gpu_memory = 7;
+    uint64 reserved_cpu_memory = 9;
+    uint64 reserved_gpu_memory = 10;
+    uint64 up_time = 8;
+}
+
+message ProcessStats {
+    double cpu_load = 1;
+    uint64 used_physical_memory = 2;
+    uint64 used_virtual_memory = 3;
+    uint64 used_gpu_memory = 4;
+    uint64 reserved_cpu_memory = 6;
+    uint64 reserved_gpu_memory = 7;
+    uint64 up_time = 5;
+}
+
+message EndpointInfo {
+    Endpoint endpoint = 1;
+    string mac_address = 2;
+    repeated string capability = 3;
+    ServerStats stats = 4;
+}
+
+message Option {
+    string name = 1;
+    string value = 2;  // Optional
+}
+
+message OptionDescriptor {
+    string name = 1;
+    string value_name = 2;
+    string description = 3;
+    bool required = 4;
+    string default_value = 5;
+}
+
+message OptionDescriptorGroup {
+    string id = 1;
+    repeated OptionDescriptor option_descriptor = 2;
+}
+
+message License {
+    string id = 1;  // License ID
+    enum KeyType {
+        UNKNOWN = 0;  // Future-proof default
+        NONE = 1;  // No key
+        STRING = 2;  // Key is a string
+        FILE = 3;  // Key is binary contents of a file
+    }
+    KeyType key_type = 2;
+    bytes key = 3;
+    Endpoint endpoint = 4;  // Optional
+    string mac_address = 5;  // Optional
+    google.protobuf.Timestamp expiry = 6;  // Optional
+    uint64 instance_limit = 7;
+}
+
+message LicenseAssignment {
+    string id = 1;  // License ID
+    string instance_id = 2;
+    Endpoint endpoint = 3;
+}
+
+message ResourceLimits {
+    uint64 min_cpu_memory = 1;
+    uint64 min_gpu_memory = 2;
+    uint64 max_cpu_memory = 3;
+    uint64 max_gpu_memory = 4;
+}
+
+message BundleInfo {
+    string id = 1;
+    string name = 2;
+    string version = 3;
+    repeated string required_capability = 4;
+    ResourceLimits resource_limits = 5;
+    repeated AnalyticInfo analytic_info = 6;
+    repeated string service_operation = 7;
+    repeated string instance_operation = 8;
+    repeated string service_id = 9;
+}
+
+message BundleServicesStatus {
+    string services_id = 1;
+    enum State {
+        UNKNOWN = 0;  // Future-proof default
+        RUNNING = 1;
+        STOPPED = 2;  // Reserved for future use
+        STARTING = 3;
+        STOPPING = 4;
+    }
+    State state = 2;
+    ProcessStats stats = 3;
+    repeated string service_ids = 4;
+}
+
+message BundleStatus {
+    BundleInfo bundle_info = 1;
+    enum BundleState {
+        BUNDLE_UNKNOWN = 0;  // Future-proof default
+        BUNDLE_INSTALLED = 1;
+        BUNDLE_REMOVED = 2;  // Reserved for future use
+        BUNDLE_ADDING = 3;
+        BUNDLE_REMOVING = 4;
+    }
+    BundleState bundle_state = 2;
+    repeated BundleServicesStatus services_status = 6;
+    reserved "services_state", "services_stats", "service_ids";
+    reserved 3, 4, 5;
+}
+
+message BundleServiceCall {
+    string id = 1;  // Bundle ID
+    string services_id = 3;
+    string operation = 2;
+}
+
+message AnalyticInfo {
+    string id = 1;  // App ID
+    string build = 2;  // Optional
+    string version = 3;
+    string name = 4;
+    repeated string required_capability = 5;
+    bool license_required = 6;
+    ResourceLimits resource_limits = 7;
+}
+
+message AnalyticBundleInfo {
+    string bundle_id = 1;
+}
+
+message AnalyticStatus {
+    AnalyticInfo analytic_info = 1;
+    oneof optional_bundle_info {
+        AnalyticBundleInfo bundle_info = 3;  // Optional
+    }
+    enum State {
+        UNKNOWN = 0;  // Future-proof default
+        INSTALLED = 1;
+        REMOVED = 2;  // Reserved for future use
+        ADDING = 3;
+        REMOVING = 4;
+    }
+    State state = 2;
+}
+
+message InstanceBundleInfo {
+    string bundle_id = 1;
+    string services_id = 3;
+    string operation = 2;
+}
+
+message InstanceStatus {
+    string id = 1;  // Instance ID
+    string app_id = 2;
+    oneof optional_bundle_info {
+        InstanceBundleInfo bundle_info = 9;  // Optional
+    }
+    string build = 3;  // Optional
+    string version = 4;
+    enum State {
+        UNKNOWN = 0;  // Future-proof default
+        RUNNING = 1;
+        STOPPED = 2;  // Reserved for future use
+        STARTING = 3;
+        STOPPING = 4;
+    }
+    State state = 5;
+    Endpoint endpoint = 6;
+    oneof optional_assigned_license {
+        License assigned_license = 7;  // Optional
+    }
+    ProcessStats stats = 8;
+}
+
+message ServiceBundleInfo {
+    string bundle_id = 1;
+    string services_id = 2;
+}
+
+message ServiceStatus {
+    string id = 1;  // Service ID
+    string app_id = 2;
+    oneof optional_bundle_info {
+        ServiceBundleInfo bundle_info = 10;  // Optional
+    }
+    string build = 3;  // Optional
+    string version = 4;
+    enum State {
+        UNKNOWN = 0;  // Future-proof default
+        RUNNING = 1;
+        STOPPED = 2;  // Reserved for future use
+        STARTING = 3;
+        STOPPING = 4;
+    }
+    State state = 5;
+    repeated string instance_id = 6;
+    Endpoint endpoint = 7;
+    Endpoint plugin_server_endpoint = 8;
+    ProcessStats stats = 9;
+    uint32 num_instances = 11;
+}
+
+message ServiceCall {
+    string id = 1;  // Service ID
+    string instance_id = 2;  // Optional
+}
+
+message StatusUpdate {
+    google.protobuf.Timestamp time = 1;
+    oneof type {
+        string service_id = 2;
+        string instance_id = 3;
+    }
+    enum StatusCode {
+        STATUS_UNKNOWN = 0;  // Future-proof default
+        STATUS_STARTING = 1;
+        STATUS_RUNNING = 2;
+        STATUS_STOPPED = 3;
+        STATUS_COMPLETED = 4;
+        STATUS_ERROR = 5;
+    }
+    StatusCode status_code = 4;
+}
+
+message StatusLog {
+    google.protobuf.Timestamp time = 1;
+    oneof type {
+        string service_id = 2;
+        string instance_id = 3;
+    }
+    string name = 4;
+    enum Level {
+        LEVEL_UNKNOWN = 0;  // Future-proof default
+        LEVEL_TRACE = 1;
+        LEVEL_DEBUG = 2;
+        LEVEL_INFO = 3;
+        LEVEL_WARN = 4;
+        LEVEL_ERROR = 5;
+    }
+    Level level = 5;
+    string message = 6;
+}
+
+message FileStoreVariable {
+    string var = 1;
+    string store_id = 2;
+}
+
+message FileStorePathInfo {
+    string path = 1;
+    enum Type {
+        UNKNOWN = 0;
+        DIRECTORY = 1;
+        FILE = 2;
+    }
+    Type type = 2;
+    uint64 file_size = 3;  // If not file, will be 0
+}
+
+message Variable {
+    string name = 1;
+    string value = 2;
+}
+
+message Pipeline {
+    message Node {
+        string id = 1;
+        string app_id = 2;
+        message Local {
+            repeated Variable variable = 1;
+            repeated Option analytic_option = 2;
+            reserved "plugin_dir";
+        }
+        message Remote {
+            Endpoint endpoint = 1;
+        }
+        message Service {
+            string service_id = 1;
+        }
+        oneof type {
+            Local local = 3;
+            Remote remote = 4;
+            Service service = 5;
+        }
+        repeated Option instance_option = 6;
+    }
+    repeated Node node = 1;
+    message Connection {
+        string from_id = 1;
+        string to_id = 2;
+        message DataFilter {
+            string type = 1;  // Optional
+            string name = 2;  // Optional
+        }
+        repeated DataFilter data_filter = 3;
+        message DataRename {
+            string type = 1;
+            string from_name = 2;
+            string to_name = 3;
+        }
+        repeated DataRename data_rename = 4;
+    }
+    repeated Connection connection = 2;
+}
+
+message DocType {
+    string type = 1;
+    string version = 2;
+}
+
+message PipelineInfo {
+    string id = 1;
+    string name = 2;
+    string version = 3;
+}
+
+message PipelineConfig {
+    DocType doctype = 1;
+    PipelineInfo info = 2;
+    Pipeline pipeline = 3;
+}
+
